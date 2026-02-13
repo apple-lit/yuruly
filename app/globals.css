@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* パステル & ソフトカラーパレット */
+    --background: 220 20% 98%;
+    --foreground: 240 10% 20%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 20%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 20%;
+    
+    --primary: 280 70% 75%;  /* Soft Purple */
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 150 60% 85%;  /* Soft Mint */
+    --secondary-foreground: 160 40% 20%;
+    
+    --muted: 220 20% 95%;
+    --muted-foreground: 220 10% 45%;
+    
+    --accent: 340 80% 85%;  /* Soft Pink */
+    --accent-foreground: 340 60% 25%;
+    
+    --destructive: 0 70% 75%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 220 15% 90%;
+    --input: 220 15% 90%;
+    --ring: 280 70% 75%;
+    
+    --radius: 1rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* カスタムグラデーション */
+.gradient-pastel {
+  background: linear-gradient(135deg, 
+    hsl(280, 70%, 85%) 0%, 
+    hsl(210, 70%, 85%) 50%, 
+    hsl(150, 60%, 85%) 100%
+  );
+}
+
+.gradient-soft {
+  background: linear-gradient(to bottom right,
+    rgba(220, 180, 255, 0.15),
+    rgba(180, 220, 255, 0.15)
+  );
+}
+
+/* カスタムアニメーション */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes bounce-once {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.15); }
+  50% { transform: scale(0.95); }
+  75% { transform: scale(1.05); }
+}
+
+.animate-bounce-once {
+  animation: bounce-once 0.4s ease-out;
+}
+
+/* タッチイベント制御 */
+.touch-none {
+  touch-action: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* スクロールバーのカスタマイズ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 1rem;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary));
+  border-radius: 1rem;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(280, 70%, 65%);
+}
