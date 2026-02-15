@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { 
@@ -17,7 +18,8 @@ import {
   Sun,
   Sunrise,
   Sunset,
-  Moon
+  Moon,
+  Edit
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,8 +34,23 @@ interface ResultsViewProps {
 }
 
 export function ResultsView({ event, responses }: ResultsViewProps) {
+  const router = useRouter();
   const [copied, setCopied] = React.useState(false);
   const [mustAttendees, setMustAttendees] = React.useState<Set<string>>(new Set());
+  const [hasExistingResponse, setHasExistingResponse] = React.useState(false);
+
+  // LocalStorageのキー
+  const storageKey = `yuruly_response_${event.id}`;
+
+  // 既存の回答があるかチェック
+  useEffect(() => {
+    const checkExistingResponse = () => {
+      const savedResponseId = localStorage.getItem(storageKey);
+      setHasExistingResponse(!!savedResponseId);
+    };
+
+    checkExistingResponse();
+  }, [storageKey]);
 
   // ベスト日程を計算
   const dateScores = useMemo(() => {
@@ -275,13 +292,17 @@ export function ResultsView({ event, responses }: ResultsViewProps) {
 
             {/* ベスト日程 - 削除（フィードバックに基づき非表示） */}
 
-            {/* 新しく回答する */}
-            <Link href={`/event/${event.id}`}>
-              <Button className="w-full bg-gradient-to-r from-purple-400 via-blue-400 to-green-400 hover:opacity-90" size="lg">
-                <Sparkles className="w-4 h-4 mr-2" />
-                新しく回答する
+            {/* 自分の回答を編集 */}
+            {hasExistingResponse && (
+              <Button 
+                onClick={() => router.push(`/event/${event.id}`)}
+                className="w-full bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white shadow-lg" 
+                size="lg"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                自分の回答を編集
               </Button>
-            </Link>
+            )}
           </div>
 
           {/* 右側: 出欠表とコメント */}
