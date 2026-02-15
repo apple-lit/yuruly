@@ -106,7 +106,7 @@ export async function submitResponse(
   name: string,
   comment: string | null,
   answers: Record<string, 'yes' | 'maybe' | 'no'>
-): Promise<boolean> {
+): Promise<string | null> {
   try {
     // 1. 回答者情報を作成
     const { data: response, error: responseError } = await supabase
@@ -134,10 +134,79 @@ export async function submitResponse(
 
     if (answersError) throw answersError;
 
-    return true;
+    return response.id; // responseIdを返す
   } catch (error) {
     console.error('Error submitting response:', error);
+    return null;
+  }
+}
+
+// 回答を更新（編集）
+export async function updateResponse(
+  responseId: string,
+  name: string,
+  answers: Record<string, 'yes' | 'maybe' | 'no'>,
+  comment?: string
+): Promise<boolean> {
+  try {
+    // 1. 回答者名とコメントを更新
+    const { error: responseError } = await supabase
+      .from('responses')
+      .update({
+        name,
+        comment: comment || null,
+      })
+      .eq('id', responseId);
+
+    if (responseError) throw responseError;
+
+    // 2. 既存の回答を削除
+    const { error: deleteError } = await supabase
+      .from('response_answers')
+      .delete()
+      .eq('response_id', responseId);
+
+    if (deleteError) throw deleteError;
+
+    // 3. 新しい回答を挿入
+    const answerRecords = Object.entries(answers).map(([dateId, status]) => ({
+      response_id: responseId,
+      event_date_id: dateId,
+      status,
+    }));
+
+    const { error: answersError } = await supabase
+      .from('response_answers')
+      .insert(answerRecords);
+
+    if (answersError) throw answersError;
+
+    return true;
+  } catch (error) {
+    console.error('Error updating response:', error);
     return false;
+  }
+}
+
+// 回答IDから回答データを取得
+export async function getResponseById(responseId: string): Promise<Response | null> {
+  try {
+    const { data, error } = await supabase
+      .from('responses')
+      .select(`
+        id,
+        name,
+        comment,
+        answers:response_answers(event_date_id, status)
+      `)
+      .eq('id', responseId)
+      .single();
+
+    if (error) throw error;
+    return data as Response;
+  } catch (error) {
+    console.error('Error fetching response:', error);
+    return null;
   }
 }
 

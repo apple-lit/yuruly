@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { 
@@ -15,7 +16,8 @@ import {
   XCircle,
   Sparkles,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Edit
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { submitResponse } from '@/lib/event-api';
+import { submitResponse, updateResponse, getResponseById } from '@/lib/event-api';
 import { Footer } from '@/components/footer';
 import type { EventData } from '@/lib/event-api';
 
@@ -35,11 +37,57 @@ interface ResponseFormProps {
 type AnswerStatus = 'yes' | 'maybe' | 'no' | null;
 
 export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
+  const router = useRouter();
   const [name, setName] = useState('');
   const [comment, setComment] = useState('');
   const [answers, setAnswers] = useState<Record<string, AnswerStatus>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [existingResponseId, setExistingResponseId] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isLoadingExisting, setIsLoadingExisting] = useState(true);
+
+  // LocalStorageのキー
+  const storageKey = `yuruly_response_${event.id}`;
+
+  // 既存の回答をロード
+  useEffect(() => {
+    const loadExistingResponse = async () => {
+      try {
+        // LocalStorageから回答IDを取得
+        const savedResponseId = localStorage.getItem(storageKey);
+        if (!savedResponseId) {
+          setIsLoadingExisting(false);
+          return;
+        }
+
+        // 回答データを取得
+        const response = await getResponseById(savedResponseId);
+        if (response) {
+          setExistingResponseId(savedResponseId);
+          setName(response.name);
+          setComment(response.comment || '');
+          setIsEditMode(true);
+
+          // 回答を復元
+          const answersMap: Record<string, AnswerStatus> = {};
+          response.answers.forEach((answer: any) => {
+            answersMap[answer.event_date_id] = answer.status;
+          });
+          setAnswers(answersMap);
+        } else {
+          // 回答が見つからない場合はlocalStorageをクリア
+          localStorage.removeItem(storageKey);
+        }
+      } catch (error) {
+        console.error('Error loading existing response:', error);
+      } finally {
+        setIsLoadingExisting(false);
+      }
+    };
+
+    loadExistingResponse();
+  }, [event.id, storageKey]);
 
   // 回答ステータスを切り替え
   const toggleAnswer = (dateId: string) => {
@@ -185,23 +233,45 @@ export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
 
     setIsSubmitting(true);
     try {
-      const success = await submitResponse(
-        event.id,
-        name.trim(),
-        comment.trim() || null,
-        completeAnswers
-      );
+      if (isEditMode && existingResponseId) {
+        // 編集モード：既存の回答を更新
+        const success = await updateResponse(
+          existingResponseId,
+          name.trim(),
+          completeAnswers,
+          comment.trim() || undefined
+        );
 
-      if (success) {
-        setSubmitted(true);
-        setTimeout(() => {
-          onSuccess();
-        }, 2000);
+        if (success) {
+          setSubmitted(true);
+          setTimeout(() => {
+            onSuccess();
+          }, 2000);
+        } else {
+          alert('回答の更新に失敗しました。もう一度お試しください。');
+        }
       } else {
-        alert('回答の送信に失敗しました。もう一度お試しください。');
+        // 新規モード：新しい回答を作成
+        const responseId = await submitResponse(
+          event.id,
+          name.trim(),
+          comment.trim() || null,
+          completeAnswers
+        );
+
+        if (responseId) {
+          // LocalStorageに保存
+          localStorage.setItem(storageKey, responseId);
+          setSubmitted(true);
+          setTimeout(() => {
+            onSuccess();
+          }, 2000);
+        } else {
+          alert('回答の送信に失敗しました。もう一度お試しください。');
+        }
       }
     } catch (error) {
-      console.error('Error submitting response:', error);
+      console.error('Error submitting/updating response:', error);
       alert('エラーが発生しました。もう一度お試しください。');
     } finally {
       setIsSubmitting(false);
@@ -217,13 +287,29 @@ export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
             <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-float">
               <CheckCircle2 className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-2xl font-bold mb-3">回答を送信しました！</h2>
+            <h2 className="text-2xl font-bold mb-3">
+              {isEditMode ? '回答を更新しました！' : '回答を送信しました！'}
+            </h2>
             <p className="text-muted-foreground mb-6">
               ご協力ありがとうございます
             </p>
             <p className="text-sm text-muted-foreground">
               結果画面にリダイレクトしています...
             </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ローディング中
+  if (isLoadingExisting) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-green-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full backdrop-blur-sm bg-white/80 shadow-lg">
+          <CardContent className="pt-12 pb-12 text-center">
+            <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-purple-400" />
+            <p className="text-muted-foreground">読み込み中...</p>
           </CardContent>
         </Card>
       </div>
@@ -241,6 +327,14 @@ export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
               yuruly
             </h1>
           </div>
+          {isEditMode && (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <Edit className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-semibold text-blue-600">
+                回答の編集モード
+              </span>
+            </div>
+          )}
         </div>
 
         {/* イベント情報 */}
@@ -354,24 +448,26 @@ export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
                       {/* メインコンテンツ */}
                       <div className="flex-1 p-4 flex items-center justify-between gap-4">
                         {/* 左側：アイコンと日付・時間情報 */}
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {timeInfo.icon}
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                          <div className="shrink-0">
+                            {timeInfo.icon}
+                          </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-bold text-xl text-gray-900 mb-0.5">
+                            <div className="font-bold text-base sm:text-lg md:text-xl text-gray-900 mb-0.5 truncate">
                               {format(new Date(date.date + 'T00:00:00'), 'M月d日(E)', { locale: ja })}
                             </div>
-                            <div className={cn("text-sm font-semibold", timeInfo.color)}>
+                            <div className={cn("text-xs sm:text-sm font-semibold truncate", timeInfo.color)}>
                               {getTimeDisplay(date)}
                             </div>
                           </div>
                         </div>
                         
                         {/* 右側：回答ボタン */}
-                        <div className="flex gap-2 shrink-0">
+                        <div className="flex gap-1.5 sm:gap-2 shrink-0">
                           <button
                             onClick={() => setAnswers(prev => ({ ...prev, [date.id]: 'yes' }))}
                             className={cn(
-                              "w-14 h-14 rounded-xl border-2 transition-all duration-300 font-bold text-2xl flex items-center justify-center shadow-sm",
+                              "w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 transition-all duration-300 font-bold text-xl sm:text-2xl flex items-center justify-center shadow-sm",
                               "active:scale-95 hover:scale-105",
                               status === 'yes'
                                 ? "border-green-600 bg-green-600 text-white scale-110 shadow-lg animate-bounce-once"
@@ -383,7 +479,7 @@ export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
                           <button
                             onClick={() => setAnswers(prev => ({ ...prev, [date.id]: 'maybe' }))}
                             className={cn(
-                              "w-14 h-14 rounded-xl border-2 transition-all duration-300 font-bold text-2xl flex items-center justify-center shadow-sm",
+                              "w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 transition-all duration-300 font-bold text-xl sm:text-2xl flex items-center justify-center shadow-sm",
                               "active:scale-95 hover:scale-105",
                               status === 'maybe'
                                 ? "border-yellow-600 bg-yellow-500 text-white scale-110 shadow-lg animate-bounce-once"
@@ -395,7 +491,7 @@ export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
                           <button
                             onClick={() => setAnswers(prev => ({ ...prev, [date.id]: 'no' }))}
                             className={cn(
-                              "w-14 h-14 rounded-xl border-2 transition-all duration-300 font-bold text-2xl flex items-center justify-center shadow-sm",
+                              "w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 transition-all duration-300 font-bold text-xl sm:text-2xl flex items-center justify-center shadow-sm",
                               "active:scale-95 hover:scale-105",
                               status === 'no'
                                 ? "border-red-600 bg-red-600 text-white scale-110 shadow-lg animate-bounce-once"
@@ -460,12 +556,21 @@ export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
           {isSubmitting ? (
             <>
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              送信中...
+              {isEditMode ? '更新中...' : '送信中...'}
             </>
           ) : (
             <>
-              <Sparkles className="w-5 h-5 mr-2" />
-              回答を送信
+              {isEditMode ? (
+                <>
+                  <Edit className="w-5 h-5 mr-2" />
+                  回答を更新
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  回答を送信
+                </>
+              )}
             </>
           )}
         </Button>
@@ -475,6 +580,11 @@ export function ResponseForm({ event, onSuccess }: ResponseFormProps) {
           <p className="text-sm text-muted-foreground">
             回答済み: {Object.values(answers).filter(a => a !== null).length} / {event.dates.length}
           </p>
+          {isEditMode && (
+            <p className="text-xs text-blue-600 mt-1">
+              💡 既存の回答を編集しています
+            </p>
+          )}
         </div>
       </div>
       
